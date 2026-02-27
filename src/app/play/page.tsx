@@ -1271,6 +1271,14 @@ function PlayPageClient() {
     Map<string, { quality: string; loadSpeed: string; pingTime: number; bitrate: string }>
   >(new Map());
 
+  // 当前源的视频信息（用于标题旁边显示）
+  const [currentSourceVideoInfo, setCurrentSourceVideoInfo] = useState<{
+    quality: string;
+    loadSpeed: string;
+    pingTime: number;
+    bitrate: string;
+  } | null>(null);
+
   // 折叠状态（仅在 lg 及以上屏幕有效）
   const [isEpisodeSelectorCollapsed, setIsEpisodeSelectorCollapsed] =
     useState(false);
@@ -1355,6 +1363,27 @@ function PlayPageClient() {
 
     // 无法判断，返回 unknown
     return 'unknown';
+  };
+
+  // 获取当前源的视频信息（分辨率和码率）
+  const fetchCurrentSourceVideoInfo = async () => {
+    if (!detail || !detail.episodes || detail.episodes.length === 0) {
+      return;
+    }
+
+    // 获取当前集数的播放地址
+    const episodeUrl = detail.episodes[currentEpisodeIndex];
+    if (!episodeUrl) {
+      return;
+    }
+
+    try {
+      const info = await getVideoResolutionFromM3u8(episodeUrl, 4000);
+      setCurrentSourceVideoInfo(info);
+    } catch (error) {
+      console.error('获取视频信息失败:', error);
+      setCurrentSourceVideoInfo(null);
+    }
   };
 
   // 播放源优选函数
@@ -3479,6 +3508,13 @@ function PlayPageClient() {
       }
     }
   }, [searchParams, currentSource, currentId, availableSources, currentEpisodeIndex]);
+
+  // 监听 detail 和 currentEpisodeIndex 变化，自动获取视频信息
+  useEffect(() => {
+    if (detail && detail.episodes && detail.episodes.length > 0) {
+      fetchCurrentSourceVideoInfo();
+    }
+  }, [detail, currentEpisodeIndex]);
 
   // 监听 detail 和 currentEpisodeIndex 变化，动态更新字幕
   useEffect(() => {
@@ -8193,10 +8229,23 @@ function PlayPageClient() {
                       <span>{doubanYear || detail?.year || videoYear}</span>
                     )}
                     {detail?.source_name && (
-                      <span className={`border px-2 py-[1px] rounded ${
-                        detail.source === 'xiaoya' ? 'border-blue-500' : detail.source === 'openlist' || detail.source === 'emby' || detail.source?.startsWith('emby_') ? 'border-yellow-500' : 'border-gray-500/60'
-                      }`}>
+                      <span
+                        className={`relative group cursor-pointer border px-2 py-[1px] rounded ${
+                          detail.source === 'xiaoya' ? 'border-blue-500' : detail.source === 'openlist' || detail.source === 'emby' || detail.source?.startsWith('emby_') ? 'border-yellow-500' : 'border-gray-500/60'
+                        }`}
+                        onClick={fetchCurrentSourceVideoInfo}
+                      >
                         {detail.source_name}
+                        {/* 视频信息悬浮提示 */}
+                        {currentSourceVideoInfo && (
+                          <div className='absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-800 dark:bg-gray-900 text-white text-sm rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 ease-out whitespace-nowrap z-[100] pointer-events-none'>
+                            <div className='text-sm'>
+                              <div>分辨率: {currentSourceVideoInfo.quality}</div>
+                              <div>码率: {currentSourceVideoInfo.bitrate}</div>
+                            </div>
+                            <div className='absolute top-full left-1/2 transform -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-800 dark:border-t-gray-900'></div>
+                          </div>
+                        )}
                       </span>
                     )}
                     {detail?.type_name && <span>{detail.type_name}</span>}
